@@ -10,7 +10,11 @@ import hashlib
 import requests
 import secrets
 from typing import Any, Optional, Tuple
-from bcsfe import core
+from bcsfe import cli, core
+from bcsfe.cli import color
+from bcsfe.core.game.catbase.gatya import GatyaEventType
+from bcsfe.core.server.event_data import split_hhmm, split_yyyymmdd
+from event_tickets import EventTickets
 
 load_dotenv()
 
@@ -220,6 +224,14 @@ class MultiValueModal(ui.Modal):
             t = ui.TextInput(label="全ステージ解放")
             self.inputs["unlock_stages"] = t
             self.add_item(t)
+        if "catseye" in values:
+            t = ui.TextInput(label="キャッツアイ")
+            self.inputs["catseye"] = t
+            self.add_item(t)
+        if "event_ticket" in values:
+            t = ui.TextInput(label="イベントチケット", default="999")
+            self.inputs["event_ticket"] = t
+            self.add_item(t)
 
     async def on_submit(self,interaction:discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -299,102 +311,157 @@ class MultiValueModal(ui.Modal):
                             cat.set_obtained(False)
                 
                 actions.append("エラーキャラ削除・リセット完了")
+
             elif k == "unlock_stages":
-                # 属性名を柔軟に探す (chapters または story_chapters)
-                target = None
-                if hasattr(s, 'story_chapters'):
-                    target = s.story_chapters
-                elif hasattr(s, 'chapters'):
-                    target = s.chapters
+             core.StoryChapters.clear_tutorial(self.editor.save_file)
+             story_chapters = self.editor.save_file.story.get_real_chapters()
+             for chapter in story_chapters:
+                 chapter.clear_chapter()
+                 for stage in chapter.get_valid_treasure_stages():
+                     stage.set_treasure(3)
+                     print("全ステージ解放・お宝コンプ完了")
+                     actions.append("全ステージ解放・お宝コンプ完了")
+            
+            elif k == "catseye":
+                raw_val = self.inputs["catseye"].value
+                amount = int(raw_val) if raw_val.isdigit() else 999
+                num_categories = len(self.editor.save_file.catseyes)
+                self.editor.save_file.catseyes = [amount] * num_categories
+                print(f"全種類のキャッツアイを {amount} 個に設定しました")
+
+            elif k == "event_ticket":
+                try:
+                    
+                    user_input = self.inputs["event_ticket"].value
+                    amount = int(user_input) if user_input.isdigit() else 999
+                except Exception:
+                    
+                    amount = 999
+
+            # 1. サーバーから生のイベントデータを直接取得
+            try:
+                handler = core.ServerHandler(self.editor.save_file)
+                gatya_data_raw = handler.download_gatya_data()
                 
-                if target:
-                    # メインストーリーの各章をループ
-                    # target.chapters がリストになっているはずです
-                    chapters_list = getattr(target, 'chapters', [])
-                    for chapter in chapters_list:
-                        # 1. 直接進行度を 48 にセット（最も確実）
-                        chapter.progress = 48
-                        
-                        # 2. clear_stage メソッドがあれば呼び出す
-                        try:
-                            for stage_idx in range(48):
-                                target.clear_stage(
-                                    chapter.chapter_index, 
-                                    0, 
-                                    stage_idx, 
-                                    overwrite_clear_progress=True
-                                )
-                        except:
-                            pass # メソッドがない場合は直接代入のみで進む
+                if gatya_data_raw is None:
+                    print("Log: イベントデータのダウンロードに失敗しました。")
+                    continue
                 
-                # 3. レジェンドストーリー等の解放（属性があれば）
-                if hasattr(s, 'legend_stages'):
-                    s.legend_stages.max_completed_stage = 1000
+                # ServerGatyaDataをパース
+                gatya_data = core.ServerGatyaData.from_data(gatya_data_raw)
+            except Exception as e:
+                print(f"Log: イベントデータ取得中にエラー: {e}")
+                continue
+
+            # 2. 現在のセーブデータ内のリストを直接書き換え
+            # ガチャデータから「イベントチケット」に関連するIDを探し、枚数を設定する
+            updated = False
+            for item in gatya_data.items:
+                # 開催中の全ガチャセットを確認
+                for gset in item.sets:
+                    if gset.number == -1: continue
+                    
+                    # チケットIDを取得 (bcsfeの内部ID体系を使用)
+                    # ここでは安全に、セーブデータの全チケット枠をamountに設定する「一括モード」を適用します
+                    updated = True
+
+            # 3. セーブデータの各チケット配列を直接一括更新
+            # 多くのイベントチケットは以下の3つのリストに格納されています
+            try:
+                # 福引ガチャチケットなど
+                self.editor.save_file.lucky_tickets = [amount] * len(self.editor.save_file.lucky_tickets)
+                # イベントガチャチケット1
+                self.editor.save_file.event_capsules = [amount] * len(self.editor.save_file.event_capsules)
+                # イベントガチャチケット2
+                self.editor.save_file.event_capsules_2 = [amount] * len(self.editor.save_file.event_capsules_2)
                 
-                actions.append("全ステージ解放完了")
+                print(f"Log: すべてのイベントチケット枠を {amount} 枚に設定しました。")
+            except Exception as e:
+                print(f"Log: チケット書き換え中にエラー: {e}")
 
         t_code,pin=self.editor.upload_save()
         if t_code:
-            dm=discord.Embed(title="代行完了",color=0x2ecc71)
-            dm.add_field(name="引継ぎコード",value=f"`{t_code}`",inline=False)
-            dm.add_field(name="PIN",value=f"`{pin}`",inline=False)
-            dm.set_footer(text="必ず保存してください")
-            try:
+             dm=discord.Embed(title="代行完了",color=0x2ecc71)
+             dm.add_field(name="引継ぎコード",value=f"`{t_code}`",inline=False)
+             dm.add_field(name="認証コード",value=f"`{pin}`",inline=False)
+             dm.set_footer(text="必ず保存してください")
+        try:
                 await interaction.user.send(embed=dm)
-            except:
+        except:
                 pass
-            done=discord.Embed(title="代行完了",description="DMに引継ぎコードを送信しました",color=0x2ecc71)
-            await interaction.followup.send(embed=done,ephemeral=True)
-            gid=str(self.editor.guild_id)
-            if gid in config:
+        done=discord.Embed(title="代行完了",description="DMに引継ぎコードを送信しました",color=0x2ecc71)
+        await interaction.followup.send(embed=done,ephemeral=True)
+        gid=str(self.editor.guild_id)
+        if gid in config:
                 ch=interaction.client.get_channel(config[gid])
                 if ch:
-                    log=discord.Embed(title="にゃんこ代行ログ",color=0x3498db)
+                    log=discord.Embed(title="にゃんこ大戦争代行ログ",color=0x3498db)
                     log.set_author(name=self.editor.user.name,icon_url=self.editor.user.display_avatar.url)
                     log.add_field(name="購入者",value=self.editor.user.mention)
                     log.add_field(name="内容",value="\n".join(actions))
                     log.add_field(name="日時",value=f"<t:{int(time.time())}:F>")
                     await ch.send(embed=log)
-        else:
-            err=discord.Embed(title="エラー",description=f"```{self.editor.last_error}```",color=0xff0000)
-            await interaction.followup.send(embed=err,ephemeral=True)
+                else:err=discord.Embed(title="エラー",description=f"```{self.editor.last_error}```",color=0xff0000)
+        await interaction.followup.send(embed=err,ephemeral=True)
 
 class ModDropdown(ui.Select):
     def __init__(self,editor):
         self.editor=editor
         options=[
-        discord.SelectOption(label="ネコカン",value="catfood"),
-        discord.SelectOption(label="XP",value="xp"),
-        discord.SelectOption(label="レアチケット",value="rare"),
-        discord.SelectOption(label="にゃんこチケット", value="normal"),
-        discord.SelectOption(label="プラチナチケット", value="platinum"),
-        discord.SelectOption(label="レジェンドチケット", value="legend"),
-        discord.SelectOption(label="NP",value="np"),
-        discord.SelectOption(label="リーダーシップ",value="lead"),
-        discord.SelectOption(label="戦闘アイテム", value="battleitem"),
-        discord.SelectOption(label="全キャラ解放", value="unlock_cats"),
-        discord.SelectOption(label="エラーキャラ削除", value="remove_error_cats"),
-        discord.SelectOption(label="全ステージ解放", value="unlock_stages"),
+        discord.SelectOption(label="1,猫缶",value="catfood"),
+        discord.SelectOption(label="2,XP",value="xp"),
+        discord.SelectOption(label="3,レアチケット",value="rare"),
+        discord.SelectOption(label="4,にゃんこチケット", value="normal"),
+        discord.SelectOption(label="5,プラチナチケット", value="platinum"),
+        discord.SelectOption(label="6,レジェンドチケット", value="legend"),
+        discord.SelectOption(label="7,NP",value="np"),
+        discord.SelectOption(label="8,リーダーシップ",value="lead"),
+        discord.SelectOption(label="9,戦闘アイテム", value="battleitem"),
+        discord.SelectOption(label="10,全キャラ解放", value="unlock_cats"),
+        discord.SelectOption(label="11,エラーキャラ削除", value="remove_error_cats"),
+        discord.SelectOption(label="12,全ステージ解放", value="unlock_stages"),
+        discord.SelectOption(label="13,キャッツアイ", value="catseye"),
+        discord.SelectOption(label="14,イベントチケット", value="event_ticket"),
         ]
         super().__init__(placeholder="適用する項目をすべて選んでください...",min_values=1,max_values=len(options),options=options)
     async def callback(self,interaction:discord.Interaction):
         await interaction.response.send_modal(MultiValueModal(self.editor,self.values))
 
 
-class LoginModal(ui.Modal,title="代行ログイン"):
-    t=ui.TextInput(label="引き継ぎコード")
-    p=ui.TextInput(label="PIN",min_length=4,max_length=4)
-    async def on_submit(self,interaction:discord.Interaction):
+class LoginModal(ui.Modal, title="代行ログイン"):
+    t = ui.TextInput(label="引き継ぎコード")
+    p = ui.TextInput(label="認証コード", min_length=4, max_length=4)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        # 1. ログイン開始のログ
+        print(f"--- ログイン処理開始 ---")
+        print(f"ユーザー: {interaction.user} (ID: {interaction.user.id})")
+        print(f"引き継ぎコード: {self.t.value}")
+        print(f"認証コード: {self.p.value}")
+        print("ステータス: ログイン中...")
+
         await interaction.response.defer(ephemeral=True)
-        editor=CloudEditor(self.t.value,self.p.value,interaction.user,interaction.guild.id)
+
+        # CloudEditorの初期化
+        editor = CloudEditor(self.t.value, self.p.value, interaction.user, interaction.guild.id)
+
+        # 2. ダウンロード処理の実行と結果ログ
         if editor.download_save():
-            embed=discord.Embed(title="ログイン成功",description="適用する項目を選択してください",color=0x5865F2)
-            view=ui.View()
+            print("ステータス: ログイン完了")
+            print(f"------------------------")
+
+            embed = discord.Embed(title="ログイン完了", description="適用する項目を選択してください", color=0x5865F2)
+            view = ui.View()
             view.add_item(ModDropdown(editor))
-            await interaction.followup.send(embed=embed,view=view,ephemeral=True)
+            await interaction.followup.send(embed=embed, view=view, ephemeral=True)
         else:
-            err=discord.Embed(title="ログイン失敗",description=f"```{editor.last_error}```",color=0xff0000)
-            await interaction.followup.send(embed=err,ephemeral=True)
+            # 3. 失敗時のログ
+            print(f"ステータス: ログイン失敗")
+            print(f"エラー内容: {editor.last_error}")
+            print(f"------------------------")
+
+            err = discord.Embed(title="ログインエラー", description=f"```{editor.last_error}```", color=0xff0000)
+            await interaction.followup.send(embed=err, ephemeral=True)
 
 
 class MyBot(commands.Bot):
@@ -405,8 +472,19 @@ class MyBot(commands.Bot):
 
 bot=MyBot()
 
+class PersistentLoginView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+    @discord.ui.button(
+        label="ログイン", 
+        style=discord.ButtonStyle.success, 
+        custom_id="persistent_bc_login" # これが再起動後の識別に必須です
+    )
+    async def login_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        # 前に作成した LoginModal を呼び出す
+        await interaction.response.send_modal(LoginModal())
 
-@bot.tree.command(name="channel")
+@bot.tree.command(name="チャンネル設定")
 @app_commands.checks.has_permissions(administrator=True)
 async def channel_set(interaction:discord.Interaction,channel:discord.TextChannel):
     config[str(interaction.guild.id)]=channel.id
@@ -414,25 +492,24 @@ async def channel_set(interaction:discord.Interaction,channel:discord.TextChanne
     embed=discord.Embed(title="ログチャンネル設定",description= "設定しました",color=0x2ecc71)
     await interaction.response.send_message(embed=embed,ephemeral=True)
 
-
-@bot.tree.command(name="にゃんこ代行")
+@bot.tree.command(name="にゃんこ大戦争代行")
 @app_commands.checks.has_permissions(administrator=True)
 async def battlecats(interaction:discord.Interaction):
-    embed=discord.Embed(title="にゃんこ大戦争自動代行",description="完全無料",color=0x2b2d31)
+    embed=discord.Embed(title="にゃんこ大戦争自動代行",description="引き継ぎコードと認証コードに間違いがないようにしてください\n\n1,猫缶 150円\n2,XP 400円\n3,レアチケットカンスト 400円\n4,にゃんこチケットカンスト 200円\n5,プラチナチケット 500円\n6,レジェンドチケット  500円\n7,NP 300円\n8,リーダーシップ 500円\n9,戦闘アイテム 400円\n10,全キャラ解放 400円\n11,エラーキャラ削除 200円\n12,全ステージ解放 200円\n13,キャッツアイ 500円\n14,イベントチケット 500円\n\nお支払い方法 PayPay",color=0x2b2d31)
     view=ui.View()
     btn=ui.Button(label="ログイン",style=discord.ButtonStyle.success)
     async def login_cb(it):
         await it.response.send_modal(LoginModal())
     btn.callback=login_cb
     view.add_item(btn)
-    await interaction.response.send_message(embed=embed,view=view)
+    await interaction.response.send_message(embed=embed, view=PersistentLoginView())
 
-@client.event
+@bot.event
 async def on_ready():
-    print(f"ログインしました: {client.user}")
+    bot.add_view(PersistentLoginView())
+    print(f"ログインしました: {bot.user}")
 
-# 取得したトークンで実行
 if TOKEN:
-    client.run(TOKEN)
+    bot.run(TOKEN)
 else:
-    print("エラー: トークンが環境変数に見つかりません。")
+    print("ログインエラー")
