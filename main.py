@@ -10,7 +10,6 @@ import hashlib
 import requests
 import secrets
 from typing import Any, Optional, Tuple
-from __future__ import annotations
 from bcsfe import cli, core
 from bcsfe.cli import color
 from bcsfe.core.game.catbase.gatya import GatyaEventType
