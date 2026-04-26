@@ -10,6 +10,7 @@ import hashlib
 import requests
 import secrets
 from typing import Any, Optional, Tuple
+from __future__ import annotations
 from bcsfe import cli, core
 from bcsfe.cli import color
 from bcsfe.core.game.catbase.gatya import GatyaEventType
@@ -232,6 +233,10 @@ class MultiValueModal(ui.Modal):
             t = ui.TextInput(label="イベントチケット", default="999")
             self.inputs["event_ticket"] = t
             self.add_item(t)
+        if "daisannkeitai" in values:
+            t = ui.TextInput(label="第3形態")
+            self.inputs["daisannkeitai"] = t
+            self.add_item(t)
 
     async def on_submit(self,interaction:discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -273,6 +278,7 @@ class MultiValueModal(ui.Modal):
                     actions.append(f"バトルアイテム全種 {num}")
                 except Exception as e:
                     print(f"Battle Item Error: {e}")
+
             elif "unlock_cats" in self.values:
                 for cat in s.cats.cats:
                     # 1. 解放フラグ
@@ -329,11 +335,21 @@ class MultiValueModal(ui.Modal):
                 self.editor.save_file.catseyes = [amount] * num_categories
                 print(f"全種類のキャッツアイを {amount} 個に設定しました")
 
+            elif k == "daisannkeitai":
+                cats_manager = self.editor.save_file.cats
+                all_cats = cats_manager.get_all_cats()
+                cats_manager.true_form_cats(
+                    cats_manager, 
+                    all_cats, 
+                    force=True, 
+                    set_current_forms=True)
+                print("第3形態開放")
+                actions.append("第3形態開放完了")
+            
             elif k == "event_ticket":
                 try:
-                    
                     user_input = self.inputs["event_ticket"].value
-                    amount = int(user_input) if user_input.isdigit() else 999
+                    amount = int(user_input) if user_input.isdigit() else 99
                 except Exception:
                     
                     amount = 999
@@ -378,7 +394,7 @@ class MultiValueModal(ui.Modal):
                 print(f"Log: すべてのイベントチケット枠を {amount} 枚に設定しました。")
             except Exception as e:
                 print(f"Log: チケット書き換え中にエラー: {e}")
-
+            
         t_code,pin=self.editor.upload_save()
         if t_code:
              dm=discord.Embed(title="代行完了",color=0x2ecc71)
@@ -422,6 +438,7 @@ class ModDropdown(ui.Select):
         discord.SelectOption(label="12,全ステージ解放", value="unlock_stages"),
         discord.SelectOption(label="13,キャッツアイ", value="catseye"),
         discord.SelectOption(label="14,イベントチケット", value="event_ticket"),
+        discord.SelectOption(label="15,第3形態", value="daisannkeitai"),
         ]
         super().__init__(placeholder="適用する項目をすべて選んでください...",min_values=1,max_values=len(options),options=options)
     async def callback(self,interaction:discord.Interaction):
