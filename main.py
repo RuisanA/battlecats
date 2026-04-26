@@ -339,25 +339,23 @@ class MultiValueModal(ui.Modal):
                 
             elif k == "daisannkeitai":
                 try:
+                    # 1. セーブファイルオブジェクトを変数 s に格納
                     s = self.editor.save_file
                     
-                    from bcsfe.core.game.game_data import game_data_getter
+                    # 2. game_data_getter を準備する (AttributeError 対策の必須処理)
+                    # あなたの環境でインポートされている core を使用します
+                    gdg = core.core_data.get_game_data_getter(s)
+                    core.core_data.game_data_getter = gdg
                     
-                    # 1. ライブラリ内部の状態を強制的に初期化
-                    # 直接 game_data_getter を作成してセットすることで AttributeError を回避します
-                    if not hasattr(core.core_data, 'game_data_getter'):
-                        # 属性自体が存在しない場合、Noneで初期化を試みるか、
-                        # 直接Getterを生成して代入します
-                        gdg = core.core_data.get_game_data_getter(s)
-                        core.core_data.game_data_getter = gdg
-                    else:
-                        core.core_data.get_game_data_getter(s)
-                    
+                    # 3. キャラクター管理クラスを取得
                     cats_manager = s.cats
+                    
+                    # 4. 「今持っているキャラ」のリストを取得
                     all_cats = cats_manager.get_all_cats()
 
-                    # 2. 第3形態化を実行
-                    # ご提示いただいた関数の通り、save_file と cats リストを渡します
+                    # 5. あなたが提示した定義通りに呼び出し
+                    # 内部で pic_book = self.read_nyanko_picture_book(save_file) が走っても
+                    # 上記の gdg 設定によりエラーにならずに進行します
                     cats_manager.true_form_cats(
                         save_file=s,
                         cats=all_cats,
@@ -369,10 +367,11 @@ class MultiValueModal(ui.Modal):
                     actions.append("所持キャラ第3形態化")
 
                 except Exception as e:
-                    # 'err' ではなく 'e' を使うように修正 (UnboundLocalError対策)
+                    # エラーメッセージを 'err' 変数に格納 (UnboundLocalError 回避)
                     print(f"Log: 第3形態開放中にエラーが発生しました: {e}")
                     import traceback
                     traceback.print_exc()
+                    err = discord.Embed(title="Error", description=f"処理失敗: {e}", color=0xff0000)
             
         t_code,pin=self.editor.upload_save()
         if t_code:
