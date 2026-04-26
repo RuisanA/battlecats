@@ -341,12 +341,14 @@ class MultiValueModal(ui.Modal):
                 try:
                     s = self.editor.save_file
                     
+                    from bcsfe.core.game.game_data import game_data_getter
+                    
                     # 1. ライブラリ内部の状態を強制的に初期化
                     # 直接 game_data_getter を作成してセットすることで AttributeError を回避します
                     if not hasattr(core.core_data, 'game_data_getter'):
                         # 属性自体が存在しない場合、Noneで初期化を試みるか、
                         # 直接Getterを生成して代入します
-                        gdg = core.game_data_getter.GameDataGetter(s)
+                        gdg = core.core_data.get_game_data_getter(s)
                         core.core_data.game_data_getter = gdg
                     else:
                         core.core_data.get_game_data_getter(s)
