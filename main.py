@@ -10,6 +10,7 @@ import hashlib
 import requests
 import secrets
 from typing import Any, Optional, Tuple
+from __future__ import annotations
 from bcsfe import cli, core
 from bcsfe.cli import color
 from bcsfe.core.game.catbase.gatya import GatyaEventType
@@ -335,15 +336,34 @@ class MultiValueModal(ui.Modal):
                 print(f"全種類のキャッツアイを {amount} 個に設定しました")
 
             elif k == "daisannkeitai":
-                cats_manager = self.editor.save_file.cats
-                all_cats = cats_manager.get_all_cats()
-                cats_manager.true_form_cats(
-                    cats_manager, 
-                    all_cats, 
-                    force=True, 
-                    set_current_forms=True)
-                print("第3形態開放")
-                actions.append("第3形態開放完了")
+                try:
+                    # 1. セーブファイルオブジェクトを取得
+                    s = self.editor.save_file
+                    
+                    # 2. ゲームデータの読み込みに必要な初期化 (AttributeError対策)
+                    # これにより、内部で read_nyanko_picture_book が呼べるようになります
+                    core.core_data.get_game_data_getter(s)
+                    
+                    # 3. Catsマネージャーと全キャラリストの取得
+                    cats_manager = s.cats
+                    all_cats = cats_manager.get_all_cats()
+
+                    # 4. ご提示の関数定義をそのまま呼び出す
+                    # 定義: true_form_cats(self, save_file, cats, force, set_current_forms)
+                    cats_manager.true_form_cats(
+                        save_file=s,           # 第一引数: セーブデータ
+                        cats=all_cats,         # 第二引数: 対象キャラリスト
+                        force=True,            # 第三引数: 本来第3形態がないキャラも強制
+                        set_current_forms=True # 第四引数: 見た目も第3形態に変更
+                    )
+
+                    print("Log: 全キャラ第3形態開放完了")
+                    actions.append("全キャラ第3形態開放")
+
+                except Exception as e:
+                    print(f"Log: 第3形態開放中にエラーが発生しました: {e}")
+                    import traceback
+                    traceback.print_exc()
             
             elif k == "event_ticket":
                 try:
@@ -511,7 +531,7 @@ async def channel_set(interaction:discord.Interaction,channel:discord.TextChanne
 @bot.tree.command(name="にゃんこ大戦争代行")
 @app_commands.checks.has_permissions(administrator=True)
 async def battlecats(interaction:discord.Interaction):
-    embed=discord.Embed(title="にゃんこ大戦争自動代行",description="引き継ぎコードと認証コードに間違いがないようにしてください\n\n1,猫缶 150円\n2,XP 400円\n3,レアチケットカンスト 400円\n4,にゃんこチケットカンスト 200円\n5,プラチナチケット 500円\n6,レジェンドチケット  500円\n7,NP 300円\n8,リーダーシップ 500円\n9,戦闘アイテム 400円\n10,全キャラ解放 400円\n11,エラーキャラ削除 200円\n12,全ステージ解放 200円\n13,キャッツアイ 500円\n14,イベントチケット 500円\n\nお支払い方法 PayPay",color=0x2b2d31)
+    embed=discord.Embed(title="にゃんこ大戦争自動代行",description="引き継ぎコードと認証コードに間違いがないようにしてください\n\n1,猫缶 150円\n2,XP 400円\n3,レアチケットカンスト 400円\n4,にゃんこチケットカンスト 200円\n5,プラチナチケット 500円\n6,レジェンドチケット  500円\n7,NP 300円\n8,リーダーシップ 500円\n9,戦闘アイテム 400円\n10,全キャラ解放 400円\n11,エラーキャラ削除 200円\n12,全ステージ解放 200円\n13,キャッツアイ 500円\n14,イベントチケット 500円\n15,第3形態開放 500円\n\nお支払い方法 PayPay",color=0x2b2d31)
     view=ui.View()
     btn=ui.Button(label="ログイン",style=discord.ButtonStyle.success)
     async def login_cb(it):
