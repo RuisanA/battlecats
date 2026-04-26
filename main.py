@@ -339,30 +339,35 @@ class MultiValueModal(ui.Modal):
                 
             elif k == "daisannkeitai":
                 try:
-                    # 1. セーブファイルオブジェクトを取得
                     s = self.editor.save_file
                     
-                    # 2. ゲームデータの読み込みに必要な初期化 (AttributeError対策)
-                    # これにより、内部で read_nyanko_picture_book が呼べるようになります
-                    core.core_data.get_game_data_getter(s)
+                    # 1. ライブラリ内部の状態を強制的に初期化
+                    # 直接 game_data_getter を作成してセットすることで AttributeError を回避します
+                    if not hasattr(core.core_data, 'game_data_getter'):
+                        # 属性自体が存在しない場合、Noneで初期化を試みるか、
+                        # 直接Getterを生成して代入します
+                        gdg = core.game_data_getter.GameDataGetter(s)
+                        core.core_data.game_data_getter = gdg
+                    else:
+                        core.core_data.get_game_data_getter(s)
                     
-                    # 3. Catsマネージャーと全キャラリストの取得
                     cats_manager = s.cats
                     all_cats = cats_manager.get_all_cats()
 
-                    # 4. ご提示の関数定義をそのまま呼び出す
-                    # 定義: true_form_cats(self, save_file, cats, force, set_current_forms)
+                    # 2. 第3形態化を実行
+                    # ご提示いただいた関数の通り、save_file と cats リストを渡します
                     cats_manager.true_form_cats(
-                        save_file=s,           # 第一引数: セーブデータ
-                        cats=all_cats,         # 第二引数: 対象キャラリスト
-                        force=True,            # 第三引数: 本来第3形態がないキャラも強制
-                        set_current_forms=True # 第四引数: 見た目も第3形態に変更
+                        save_file=s,
+                        cats=all_cats,
+                        force=True,
+                        set_current_forms=True
                     )
 
-                    print("Log: 全キャラ第3形態開放完了")
-                    actions.append("全キャラ第3形態開放")
+                    print("Log: 所持キャラの第3形態開放完了")
+                    actions.append("所持キャラ第3形態化")
 
                 except Exception as e:
+                    # 'err' ではなく 'e' を使うように修正 (UnboundLocalError対策)
                     print(f"Log: 第3形態開放中にエラーが発生しました: {e}")
                     import traceback
                     traceback.print_exc()
