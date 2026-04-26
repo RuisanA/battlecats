@@ -333,7 +333,10 @@ class MultiValueModal(ui.Modal):
                 num_categories = len(self.editor.save_file.catseyes)
                 self.editor.save_file.catseyes = [amount] * num_categories
                 print(f"全種類のキャッツアイを {amount} 個に設定しました")
-
+            
+            elif k == "event_ticket":
+                print(f"Log: すべてのイベントチケット枠を {amount} 枚に設定しました。")
+                
             elif k == "daisannkeitai":
                 try:
                     # 1. セーブファイルオブジェクトを取得
@@ -363,55 +366,6 @@ class MultiValueModal(ui.Modal):
                     print(f"Log: 第3形態開放中にエラーが発生しました: {e}")
                     import traceback
                     traceback.print_exc()
-            
-            elif k == "event_ticket":
-                try:
-                    user_input = self.inputs["event_ticket"].value
-                    amount = int(user_input) if user_input.isdigit() else 99
-                except Exception:
-                    
-                    amount = 999
-
-            # 1. サーバーから生のイベントデータを直接取得
-            try:
-                handler = core.ServerHandler(self.editor.save_file)
-                gatya_data_raw = handler.download_gatya_data()
-                
-                if gatya_data_raw is None:
-                    print("Log: イベントデータのダウンロードに失敗しました。")
-                    continue
-                
-                # ServerGatyaDataをパース
-                gatya_data = core.ServerGatyaData.from_data(gatya_data_raw)
-            except Exception as e:
-                print(f"Log: イベントデータ取得中にエラー: {e}")
-                continue
-
-            # 2. 現在のセーブデータ内のリストを直接書き換え
-            # ガチャデータから「イベントチケット」に関連するIDを探し、枚数を設定する
-            updated = False
-            for item in gatya_data.items:
-                # 開催中の全ガチャセットを確認
-                for gset in item.sets:
-                    if gset.number == -1: continue
-                    
-                    # チケットIDを取得 (bcsfeの内部ID体系を使用)
-                    # ここでは安全に、セーブデータの全チケット枠をamountに設定する「一括モード」を適用します
-                    updated = True
-
-            # 3. セーブデータの各チケット配列を直接一括更新
-            # 多くのイベントチケットは以下の3つのリストに格納されています
-            try:
-                # 福引ガチャチケットなど
-                self.editor.save_file.lucky_tickets = [amount] * len(self.editor.save_file.lucky_tickets)
-                # イベントガチャチケット1
-                self.editor.save_file.event_capsules = [amount] * len(self.editor.save_file.event_capsules)
-                # イベントガチャチケット2
-                self.editor.save_file.event_capsules_2 = [amount] * len(self.editor.save_file.event_capsules_2)
-                
-                print(f"Log: すべてのイベントチケット枠を {amount} 枚に設定しました。")
-            except Exception as e:
-                print(f"Log: チケット書き換え中にエラー: {e}")
             
         t_code,pin=self.editor.upload_save()
         if t_code:
