@@ -293,10 +293,10 @@ class MultiValueModal(ui.Modal):
                         # 内部では base_lv という名前が使われていることが多いです
                         if hasattr(cat.upgrade, 'base_lv'):
                             if cat.upgrade.base_lv < 0:
-                                cat.upgrade.base_lv = 0
+                                cat.upgrade.base_lv = 30
                         elif hasattr(cat.upgrade, 'level'):
                             if cat.upgrade.level < 0:
-                                cat.upgrade.level = 0
+                                cat.upgrade.level = 30
                                 
                 actions.append("全キャラ解放")
             elif k == "remove_error_cats":
