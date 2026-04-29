@@ -342,43 +342,40 @@ class MultiValueModal(ui.Modal):
             
             elif k == "catseye":
                 try:
-                    # 1. 必要なクラスをインポート
-                    from bcsfe.core.game.catbase.gatya_item import GatyaItemBuy, GatyaItemCategory
+                    # 1. マタタビのカタログ情報を取得
+                    # (あなたが提示したMatatabiクラスを利用します)
+                    from bcsfe.core.game.catbase.matatabi import Matatabi
+                    from bcsfe.core.game.catbase.gatya_item import GatyaItem
                     
-                    # 2. GatyaItemBuyを初期化
-                    # もし core_data に get_game_data_getter がないと言われる場合は
-                    # ライブラリ内部で SaveFile 自体から取得するように書き換わっている可能性があります
-                    gatya_item_buy = GatyaItemBuy(s)
+                    matatabi_catalog = Matatabi(s)
+                    matatabi_list = matatabi_catalog.matatabi # Fruitオブジェクトのリスト
                     
-                    # 3. キャッツアイのカテゴリ(5)を取得
-                    catseye_items = gatya_item_buy.get_by_category(GatyaItemCategory.CATSEYES)
-                    
-                    if not catseye_items:
-                        print("Log: キャッツアイのリストが空です。")
+                    if not matatabi_list:
+                        print("Error: マタタビのカタログデータが読み込めませんでした")
                         return
 
-                    # 4. 所持数を書き換え
                     count = 0
-                    for item_info, name in gatya_item_buy.get_names_by_category(GatyaItemCategory.CATSEYES):
-                        # s.gatya_items.items は dict[int, GatyaItem] の構造
-                        # item_info.id をインデックスとして所持数を操作
-                        if item_info.id in s.gatya_items.items:
-                            s.gatya_items.items[item_info.id].count = 999
-                            count += 1
+                    # 2. カタログにある全マタタビのIDをループで処理
+                    for fruit in matatabi_list:
+                        item_id = fruit.id
+                        
+                        # セーブデータの所持品辞書にアクセス
+                        items_dict = s.gatya_items.items
+                        
+                        # 3. 所持数を999に設定（枠がなければ作成）
+                        if item_id in items_dict:
+                            items_dict[item_id].count = 999
                         else:
-                            # まだ枠がない場合は初期化して追加（念のため）
-                            from bcsfe.core.game.catbase.gatya_item import GatyaItem
-                            new_item = GatyaItem(999)
-                            s.gatya_items.items[item_info.id] = new_item
-                            count += 1
+                            items_dict[item_id] = GatyaItem(999)
+                        
+                        count += 1
                     
-                    print(f"Log: キャッツアイ全解放完了 ({count}種類)")
-                    actions.append(f"全キャッツアイ999個化")
-                    
+                    print(f"Log: 全マタタビを解放・カンストしました ({count}種類)")
+                    actions.append(f"全マタタビ解放 ({count}種類)")
+
                 except Exception as e:
-                    import traceback
-                    print(f"Catseye Error Detailed: {traceback.format_exc()}")
-                    actions.append(f"エラー: {e}")
+                    print(f"Matatabi Error: {e}")
+                    actions.append(f"マタタビ処理失敗: {e}")
             
             elif k == "event_ticket":
                 print(f"Log: すべてのイベントチケット枠を {amount} 枚に設定しました。")
