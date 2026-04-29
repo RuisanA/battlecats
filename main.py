@@ -400,7 +400,7 @@ class ModDropdown(ui.Select):
         ]
         super().__init__(placeholder="適用する項目をすべて選んでください...",min_values=1,max_values=len(options),options=options)
     async def callback(self,interaction:discord.Interaction):
-        await interaction.response.send_modal(MultiValueModal(self.editor,self.values, self.save_file))
+        await interaction.response.send_modal(MultiValueModal(self.editor,self.values, self.editor.save_file))
 
 
 class LoginModal(ui.Modal, title="代行ログイン"):
