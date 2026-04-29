@@ -1,3 +1,4 @@
+from bcsfe.core.game.catbase.nyanko_club import NyankoClub
 from bcsfe.cli.edits import (
     basic_items,
     cat_editor,
