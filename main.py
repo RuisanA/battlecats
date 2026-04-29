@@ -237,6 +237,10 @@ class MultiValueModal(ui.Modal):
             t = ui.TextInput(label="第3形態")
             self.inputs["daisannkeitai"] = t
             self.add_item(t)
+        if "gold_pass" in values:
+            t = ui.TextInput(label="にゃんこクラブゴールド会員")
+            self.inputs["gold_pass"] = t
+            self.add_item(t)
 
     async def on_submit(self,interaction:discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -353,6 +357,29 @@ class MultiValueModal(ui.Modal):
                     print(f"Error details: {e}")
                     actions.append("所持キャラ第3形態化")
             
+            elif k == "gold_pass":
+                try:
+                    # 1. セーブデータからOfficerPassとNyankoClubのデータ層を特定
+                    # s = self.editor.save_file が定義されている前提
+                    officer_pass = s.officer_pass
+                    club = officer_pass.gold_pass
+                    
+                    # 2. Officer IDをランダムに生成
+                    # ライブラリ内の既存の静的メソッドを利用
+                    officer_id = core.NyankoClub.get_random_officer_id()
+                    
+                    # 3. 30日分のゴールドパス権限を付与
+                    # この1行で開始日・終了日・更新回数・報酬フラグがすべて自動計算・セットされます
+                    club.get_gold_pass(officer_id, 30, s)
+
+                    print(f"Log: ゴールドパス解放完了 (ID: {officer_id})")
+                    actions.append(f"ゴールドパス解放 (ID: {officer_id})")
+
+                except Exception as e:
+                    # 階層名が違った場合などのために詳細なエラーログを出す
+                    print(f"Gold Pass Error: {e}")
+                    actions.append(f"ゴールドパス解放失敗: {e}")
+            
         t_code,pin=self.editor.upload_save()
         if t_code:
              dm=discord.Embed(title="代行完了",color=0x2ecc71)
@@ -397,6 +424,7 @@ class ModDropdown(ui.Select):
         discord.SelectOption(label="13,キャッツアイ", value="catseye"),
         discord.SelectOption(label="14,イベントチケット", value="event_ticket"),
         discord.SelectOption(label="15,第3形態", value="daisannkeitai"),
+        discord.SelectOption(label="16,にゃんこクラブゴールド会員", value="gold_pass"),
         ]
         super().__init__(placeholder="適用する項目をすべて選んでください...",min_values=1,max_values=len(options),options=options)
     async def callback(self,interaction:discord.Interaction):
