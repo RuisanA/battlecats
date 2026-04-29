@@ -342,32 +342,43 @@ class MultiValueModal(ui.Modal):
             
             elif k == "catseye":
                 try:
-                    # 1. アイテムのカタログ（マスターデータ）を取得
+                    # 1. 必要なクラスをインポート
                     from bcsfe.core.game.catbase.gatya_item import GatyaItemBuy, GatyaItemCategory
+                    
+                    # 2. GatyaItemBuyを初期化
+                    # もし core_data に get_game_data_getter がないと言われる場合は
+                    # ライブラリ内部で SaveFile 自体から取得するように書き換わっている可能性があります
                     gatya_item_buy = GatyaItemBuy(s)
                     
-                    # 2. カテゴリが「CATSEYES (5)」のアイテムリストを抽出
+                    # 3. キャッツアイのカテゴリ(5)を取得
                     catseye_items = gatya_item_buy.get_by_category(GatyaItemCategory.CATSEYES)
                     
                     if not catseye_items:
-                        print("Error: キャッツアイのデータが見つかりません")
+                        print("Log: キャッツアイのリストが空です。")
                         return
 
-                    # 3. 抽出したIDに基づいて、セーブデータの所持数を書き換える
-                    # 一般的に s.gatya_items.items[アイテムID].count のような構造です
+                    # 4. 所持数を書き換え
                     count = 0
-                    for item in catseye_items:
-                        # item.id がアイテム固有の番号
-                        target_item = s.gatya_items.get_item(item.id)
-                        if target_item:
-                            target_item.count = 999
+                    for item_info, name in gatya_item_buy.get_names_by_category(GatyaItemCategory.CATSEYES):
+                        # s.gatya_items.items は dict[int, GatyaItem] の構造
+                        # item_info.id をインデックスとして所持数を操作
+                        if item_info.id in s.gatya_items.items:
+                            s.gatya_items.items[item_info.id].count = 999
+                            count += 1
+                        else:
+                            # まだ枠がない場合は初期化して追加（念のため）
+                            from bcsfe.core.game.catbase.gatya_item import GatyaItem
+                            new_item = GatyaItem(999)
+                            s.gatya_items.items[item_info.id] = new_item
                             count += 1
                     
-                    print(f"Log: 全キャッツアイを999個に設定完了 ({count}種類)")
+                    print(f"Log: キャッツアイ全解放完了 ({count}種類)")
                     actions.append(f"全キャッツアイ999個化")
+                    
                 except Exception as e:
-                    print(f"Catseye Error: {e}")
-                    actions.append(f"キャッツアイ処理失敗: {e}")
+                    import traceback
+                    print(f"Catseye Error Detailed: {traceback.format_exc()}")
+                    actions.append(f"エラー: {e}")
             
             elif k == "event_ticket":
                 print(f"Log: すべてのイベントチケット枠を {amount} 枚に設定しました。")
