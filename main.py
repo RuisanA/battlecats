@@ -341,11 +341,33 @@ class MultiValueModal(ui.Modal):
                      actions.append("全ステージ解放・お宝コンプ完了")
             
             elif k == "catseye":
-                raw_val = self.inputs["catseye"].value
-                amount = int(raw_val) if raw_val.isdigit() else 999
-                num_categories = len(self.editor.save_file.catseyes)
-                self.editor.save_file.catseyes = [amount] * num_categories
-                print(f"全種類のキャッツアイを {amount} 個に設定しました")
+                try:
+                    # 1. アイテムのカタログ（マスターデータ）を取得
+                    from bcsfe.core.game.catbase.gatya_item import GatyaItemBuy, GatyaItemCategory
+                    gatya_item_buy = GatyaItemBuy(s)
+                    
+                    # 2. カテゴリが「CATSEYES (5)」のアイテムリストを抽出
+                    catseye_items = gatya_item_buy.get_by_category(GatyaItemCategory.CATSEYES)
+                    
+                    if not catseye_items:
+                        print("Error: キャッツアイのデータが見つかりません")
+                        return
+
+                    # 3. 抽出したIDに基づいて、セーブデータの所持数を書き換える
+                    # 一般的に s.gatya_items.items[アイテムID].count のような構造です
+                    count = 0
+                    for item in catseye_items:
+                        # item.id がアイテム固有の番号
+                        target_item = s.gatya_items.get_item(item.id)
+                        if target_item:
+                            target_item.count = 999
+                            count += 1
+                    
+                    print(f"Log: 全キャッツアイを999個に設定完了 ({count}種類)")
+                    actions.append(f"全キャッツアイ999個化")
+                except Exception as e:
+                    print(f"Catseye Error: {e}")
+                    actions.append(f"キャッツアイ処理失敗: {e}")
             
             elif k == "event_ticket":
                 print(f"Log: すべてのイベントチケット枠を {amount} 枚に設定しました。")
