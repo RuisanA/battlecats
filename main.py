@@ -241,6 +241,10 @@ class MultiValueModal(ui.Modal):
             t = ui.TextInput(label="にゃんこクラブゴールド会員")
             self.inputs["gold_pass"] = t
             self.add_item(t)
+        if "item_pack" in values:
+            t = ui.TextInput(label="アイテムパック解放")
+            self.inputs["item_pack"] = t
+            self.add_item(t)
 
     async def on_submit(self,interaction:discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -359,26 +363,45 @@ class MultiValueModal(ui.Modal):
             
             elif k == "gold_pass":
                 try:
-                    # 1. セーブデータからOfficerPassとNyankoClubのデータ層を特定
-                    # s = self.editor.save_file が定義されている前提
                     officer_pass = s.officer_pass
                     club = officer_pass.gold_pass
                     
-                    # 2. Officer IDをランダムに生成
-                    # ライブラリ内の既存の静的メソッドを利用
                     officer_id = core.NyankoClub.get_random_officer_id()
-                    
-                    # 3. 30日分のゴールドパス権限を付与
-                    # この1行で開始日・終了日・更新回数・報酬フラグがすべて自動計算・セットされます
                     club.get_gold_pass(officer_id, 30, s)
 
                     print(f"Log: ゴールドパス解放完了 (ID: {officer_id})")
                     actions.append(f"ゴールドパス解放 (ID: {officer_id})")
 
                 except Exception as e:
-                    # 階層名が違った場合などのために詳細なエラーログを出す
                     print(f"Gold Pass Error: {e}")
                     actions.append(f"ゴールドパス解放失敗: {e}")
+
+            elif k == "item_pack":
+                try:
+                    # 1. ItemPackオブジェクトを取得
+                    # s = self.editor.save_file (定義済みと想定)
+                    item_pack = s.item_pack
+                    
+                    # 2. 購入データ(Purchases)内のすべてのセットをループ
+                    # item_pack.purchases.purchases は dict[int, PurchaseSet]
+                    count = 0
+                    for set_id, purchase_set in item_pack.purchases.purchases.items():
+                        # 各セット内の個別のパック(PurchasedPack)をすべて購入済みにする
+                        # purchase_set.purchases は dict[str, PurchasedPack]
+                        for pack_name, pack in purchase_set.purchases.items():
+                            if not pack.purchased:
+                                pack.purchased = True
+                                count += 1
+                    
+                    # 3. ついでに期間限定パックの残り時間などもリセット(必要なら)
+                    item_pack.three_days_started = False
+                    
+                    print(f"Log: 全アイテムパックの購入フラグを有効化しました ({count}件書き換え)")
+                    actions.append("全アイテムパック購入済み化")
+
+                except Exception as e:
+                    print(f"Item Pack Error: {e}")
+                    actions.append(f"アイテムパック処理失敗: {e}")
             
         t_code,pin=self.editor.upload_save()
         if t_code:
@@ -425,6 +448,7 @@ class ModDropdown(ui.Select):
         discord.SelectOption(label="14,イベントチケット", value="event_ticket"),
         discord.SelectOption(label="15,第3形態", value="daisannkeitai"),
         discord.SelectOption(label="16,にゃんこクラブゴールド会員", value="gold_pass"),
+        discord.SelectOption(label="17,アイテムパック解放", value="item_pack"),
         ]
         super().__init__(placeholder="適用する項目をすべて選んでください...",min_values=1,max_values=len(options),options=options)
     async def callback(self,interaction:discord.Interaction):
