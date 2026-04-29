@@ -171,10 +171,11 @@ class CloudEditor:
             return None,None
 
 class MultiValueModal(ui.Modal):
-    def __init__(self,editor,values):
+    def __init__(self,editor,values,save_file):
         super().__init__(title="数値入力")
         self.editor=editor
         self.values=values
+        self.save_file=save_file
         self.inputs={}
         if "catfood" in values:
             t=ui.TextInput(label="ネコカン")
@@ -232,7 +233,7 @@ class MultiValueModal(ui.Modal):
             t = ui.TextInput(label="イベントチケット", default="999")
             self.inputs["event_ticket"] = t
             self.add_item(t)
-        if "daisannkeitai" in values:
+        if "daisannkeitai" in save_file:
             t = ui.TextInput(label="第3形態")
             self.inputs["daisannkeitai"] = t
             self.add_item(t)
