@@ -340,10 +340,10 @@ class MultiValueModal(ui.Modal):
                 
             elif k == "daisannkeitai":
                 try:
-                    all_cats = s.cats.get_all()
+                    all_cats: list[core.Cat] = s.cats.cats
                     set_cat_current_forms = True 
-                    self.save_file.cats.true_form_cats(
-                        self.save_file, 
+                    s.cats.true_form_cats(
+                        s, 
                         all_cats, 
                         True, # force: True
                         set_cat_current_forms
