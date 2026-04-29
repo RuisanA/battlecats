@@ -342,31 +342,26 @@ class MultiValueModal(ui.Modal):
             
             elif k == "catseye":
                 try:
-                    # 1. マタタビのカタログ情報を取得
-                    # (あなたが提示したMatatabiクラスを利用します)
                     from bcsfe.core.game.catbase.matatabi import Matatabi
-                    from bcsfe.core.game.catbase.gatya_item import GatyaItem
                     
                     matatabi_catalog = Matatabi(s)
-                    matatabi_list = matatabi_catalog.matatabi # Fruitオブジェクトのリスト
+                    matatabi_list = matatabi_catalog.matatabi
                     
                     if not matatabi_list:
-                        print("Error: マタタビのカタログデータが読み込めませんでした")
+                        print("Error: カタログが読み込めませんでした")
                         return
 
                     count = 0
-                    # 2. カタログにある全マタタビのIDをループで処理
                     for fruit in matatabi_list:
                         item_id = fruit.id
-                        
-                        # セーブデータの所持品辞書にアクセス
                         items_dict = s.gatya_items.items
                         
-                        # 3. 所持数を999に設定（枠がなければ作成）
                         if item_id in items_dict:
                             items_dict[item_id].count = 999
                         else:
-                            items_dict[item_id] = GatyaItem(999)
+                            # ファイルを個別にインポートせず、coreから直接クラスを呼び出す
+                            # これで「GatyaItemが見つからない」エラーを回避できます
+                            items_dict[item_id] = core.GatyaItem(999)
                         
                         count += 1
                     
