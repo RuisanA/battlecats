@@ -339,39 +339,18 @@ class MultiValueModal(ui.Modal):
                 
             elif k == "daisannkeitai":
                 try:
-                    # 1. セーブファイルオブジェクトを変数 s に格納
-                    s = self.editor.save_file
-                    
-                    # 2. game_data_getter を準備する (AttributeError 対策の必須処理)
-                    # あなたの環境でインポートされている core を使用します
-                    gdg = core.core_data.get_game_data_getter(s)
-                    core.core_data.game_data_getter = gdg
-                    
-                    # 3. キャラクター管理クラスを取得
-                    cats_manager = s.cats
-                    
-                    # 4. 「今持っているキャラ」のリストを取得
-                    all_cats = cats_manager.get_all_cats()
-
-                    # 5. あなたが提示した定義通りに呼び出し
-                    # 内部で pic_book = self.read_nyanko_picture_book(save_file) が走っても
-                    # 上記の gdg 設定によりエラーにならずに進行します
-                    cats_manager.true_form_cats(
-                        save_file=s,
-                        cats=all_cats,
-                        force=True,
-                        set_current_forms=True
-                    )
-
+                    all_cats = self.save_file.cats.get_all()
+                    set_cat_current_forms = True 
+                    self.save_file.cats.true_form_cats(
+                        self.save_file, 
+                        all_cats, 
+                        True, # force: True
+                        set_cat_current_forms
+                        )
                     print("Log: 所持キャラの第3形態開放完了")
-                    actions.append("所持キャラ第3形態化")
-
                 except Exception as e:
-                    # エラーメッセージを 'err' 変数に格納 (UnboundLocalError 回避)
-                    print(f"Log: 第3形態開放中にエラーが発生しました: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    err = discord.Embed(title="Error", description=f"処理失敗: {e}", color=0xff0000)
+                    print(f"Error details: {e}")
+                    actions.append("所持キャラ第3形態化")
             
         t_code,pin=self.editor.upload_save()
         if t_code:
