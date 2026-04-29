@@ -245,6 +245,10 @@ class MultiValueModal(ui.Modal):
             t = ui.TextInput(label="アイテムパック解放")
             self.inputs["item_pack"] = t
             self.add_item(t)
+        if "medals" in values:
+            t = ui.TextInput(label="にゃんこメダル全解放")
+            self.inputs["medals"] = t
+            self.add_item(t)
 
     async def on_submit(self,interaction:discord.Interaction):
         await interaction.response.defer(ephemeral=True)
@@ -402,6 +406,25 @@ class MultiValueModal(ui.Modal):
                 except Exception as e:
                     print(f"Item Pack Error: {e}")
                     actions.append(f"アイテムパック処理失敗: {e}")
+
+            elif k == "medals":
+                try:
+                    # 1. Medalsオブジェクトを取得
+                    medals_obj = s.medals
+                    
+                    # 2. ゲームデータからメダルの総数を取得して、すべて追加する
+                    # (ID 0 から 150 くらいまでループを回して一括追加するのが確実)
+                    count = 0
+                    for medal_id in range(200): # 余裕を持って200番まで
+                        if not medals_obj.has_medal(medal_id):
+                            medals_obj.add_medal(medal_id)
+                            count += 1
+                    
+                    print(f"Log: 全メダルを解放しました ({count}個追加)")
+                    actions.append("全メダル解放")
+                except Exception as e:
+                    print(f"Medals Error: {e}")
+                    actions.append(f"メダル処理失敗: {e}")
             
         t_code,pin=self.editor.upload_save()
         if t_code:
@@ -449,6 +472,7 @@ class ModDropdown(ui.Select):
         discord.SelectOption(label="15,第3形態", value="daisannkeitai"),
         discord.SelectOption(label="16,にゃんこクラブゴールド会員", value="gold_pass"),
         discord.SelectOption(label="17,アイテムパック解放", value="item_pack"),
+        discord.SelectOption(label="18,にゃんこメダル全解放", value="medals"),
         ]
         super().__init__(placeholder="適用する項目をすべて選んでください...",min_values=1,max_values=len(options),options=options)
     async def callback(self,interaction:discord.Interaction):
