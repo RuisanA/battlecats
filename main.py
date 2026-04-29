@@ -233,7 +233,7 @@ class MultiValueModal(ui.Modal):
             t = ui.TextInput(label="イベントチケット", default="999")
             self.inputs["event_ticket"] = t
             self.add_item(t)
-        if "daisannkeitai" in save_file:
+        if "daisannkeitai" in values:
             t = ui.TextInput(label="第3形態")
             self.inputs["daisannkeitai"] = t
             self.add_item(t)
@@ -340,7 +340,7 @@ class MultiValueModal(ui.Modal):
                 
             elif k == "daisannkeitai":
                 try:
-                    all_cats = self.save_file.cats.get_all()
+                    all_cats = s.cats.get_all()
                     set_cat_current_forms = True 
                     self.save_file.cats.true_form_cats(
                         self.save_file, 
