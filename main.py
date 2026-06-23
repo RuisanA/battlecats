@@ -87,7 +87,7 @@ class CloudEditor:
         url=f"{self.SAVE_URL}/v2/transfers/{self.transfer_code}/reception"
         payload={
         "clientInfo":{
-        "client":{"version":"15.4.0","countryCode":"ja"},
+        "client":{"version":"15.4.2","countryCode":"ja"},
         "os":{"type":"android","version":"13"},
         "device":{"model":"SM-S918B"}
         },
@@ -129,7 +129,7 @@ class CloudEditor:
             "accountCode":inq,
             "password":self.password,
             "clientInfo":{
-            "client":{"version":"15.3.0","countryCode":"ja"},
+            "client":{"version":"15.4.2","countryCode":"ja"},
             "os":{"type":"android","version":"9"},
             "device":{"model":"SM-G955F"}
             },
