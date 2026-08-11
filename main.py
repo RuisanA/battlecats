@@ -167,332 +167,276 @@ class CloudEditor:
             self.last_error = str(e)
             return None, None
 
-class MultiValueModal(ui.Modal):
-    def __init__(self, editor, values, save_file):
-        super().__init__(title="数値入力")
-        self.editor = editor
-        self.values = values
-        self.save_file = save_file
-        self.inputs = {}
-        
-        # テキスト入力が不要な機能（一括全MAX、全キャラレベル30など）のみの場合はフォームをスキップ
-        needs_input = False
-        
-        if "catfood" in values:
-            t = ui.TextInput(label="ネコカン")
-            self.inputs["catfood"] = t
-            self.add_item(t)
-            needs_input = True
-        if "xp" in values:
-            t = ui.TextInput(label="XP")
-            self.inputs["xp"] = t
-            self.add_item(t)
-            needs_input = True
-        if "rare" in values:
-            t = ui.TextInput(label="レアチケット")
-            self.inputs["rare"] = t
-            self.add_item(t)
-            needs_input = True
-        if "normal" in values:
-            t = ui.TextInput(label="にゃんこチケット")
-            self.inputs["normal"] = t
-            self.add_item(t)
-            needs_input = True
-        if "platinum" in values:
-            t = ui.TextInput(label="プラチナチケット")
-            self.inputs["platinum"] = t
-            self.add_item(t)
-            needs_input = True
-        if "legend" in values:
-            t = ui.TextInput(label="レジェンドチケット")
-            self.inputs["legend"] = t
-            self.add_item(t)
-            needs_input = True
-        if "np" in values:
-            t = ui.TextInput(label="NP")
-            self.inputs["np"] = t
-            self.add_item(t)
-            needs_input = True
-        if "lead" in values:
-            t = ui.TextInput(label="リーダーシップ")
-            self.inputs["lead"] = t
-            self.add_item(t)
-            needs_input = True
-        if "battleitem" in values:
-            t = ui.TextInput(label="戦闘アイテム")
-            self.inputs["battleitem"] = t
-            self.add_item(t)
-            needs_input = True
-        if "unlock_cats" in values:
-            t = ui.TextInput(label="全キャラ解放 (任意の文字)")
-            self.inputs["unlock_cats"] = t
-            self.add_item(t)
-            needs_input = True
-        if "remove_error_cats" in values:
-            t = ui.TextInput(label="エラーキャラ削除 (任意の文字)")
-            self.inputs["remove_error_cats"] = t
-            self.add_item(t)
-        if "unlock_stages" in values:
-            t = ui.TextInput(label="全ステージ解放 (任意の文字)")
-            self.inputs["unlock_stages"] = t
-            self.add_item(t)
-        if "catseye" in values:
-            t = ui.TextInput(label="キャッツアイ")
-            self.inputs["catseye"] = t
-            self.add_item(t)
-            needs_input = True
-        if "event_ticket" in values:
-            t = ui.TextInput(label="イベントチケット", default="999")
-            self.inputs["event_ticket"] = t
-            self.add_item(t)
-            needs_input = True
-        if "daisannkeitai" in values:
-            t = ui.TextInput(label="第3形態 (任意の文字)")
-            self.inputs["daisannkeitai"] = t
-            self.add_item(t)
-            needs_input = True
-        if "gold_pass" in values:
-            t = ui.TextInput(label="にゃんこクラブゴールド会員 (任意の文字)")
-            self.inputs["gold_pass"] = t
-            self.add_item(t)
-            needs_input = True
-        if "item_pack" in values:
-            t = ui.TextInput(label="アイテムパック解放 (任意の文字)")
-            self.inputs["item_pack"] = t
-            self.add_item(t)
-            needs_input = True
-        if "medals" in values:
-            t = ui.TextInput(label="にゃんこメダル全解放 (任意の文字)")
-            self.inputs["medals"] = t
-            self.add_item(t)
-            needs_input = True
+def process_modifications(editor: CloudEditor, values: list, input_data: dict) -> list:
+    """Mod適用ロジックを共通化"""
+    s = editor.save_file
+    actions = []
 
-    async def on_submit(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-        s = self.editor.save_file
-        actions = []
+    # --- 1. アイテム全MAX処理 ---
+    if "max_items" in values:
+        try:
+            s.set_catfood(45000)
+            s.set_xp(99999999)
+            s.set_rare_tickets(299)
+            s.set_normal_tickets(999)
+            s.set_platinum_tickets(9)
+            s.set_legend_tickets(9)
+            s.set_np(9999)
+            s.set_leadership(9999)
 
-        # --- 1. アイテム全MAX処理 ---
-        if "max_items" in self.values:
+            for i in range(len(s.battle_items.items)):
+                s.battle_items.items[i] = 999
+
+            from bcsfe.core.game.catbase.matatabi import Matatabi
+            matatabi_catalog = Matatabi(s)
+            if matatabi_catalog.matatabi:
+                for fruit in matatabi_catalog.matatabi:
+                    item_id = fruit.id
+                    items_dict = s.gatya_items.items
+                    if item_id in items_dict:
+                        items_dict[item_id].count = 999
+                    else:
+                        items_dict[item_id] = core.GatyaItem(999)
+
+            actions.append("🚀 主要アイテム全MAX (カンスト設定)")
+        except Exception as e:
+            print(f"Max Items Error: {e}")
+            actions.append(f"アイテム全MAX処理失敗: {e}")
+
+    # --- 2. 解放済み全キャラレベル30化 ---
+    if "max_cat_levels" in values:
+        try:
+            count = 0
+            for cat in s.cats.cats:
+                if getattr(cat, "unlocked", False):
+                    if hasattr(cat, "upgrade") and cat.upgrade is not None:
+                        if hasattr(cat.upgrade, "base_lv"):
+                            cat.upgrade.base_lv = 29
+                        elif hasattr(cat.upgrade, "level"):
+                            cat.upgrade.level = 29
+                        count += 1
+                    elif hasattr(cat, "level"):
+                        cat.level = 29
+                        count += 1
+            actions.append(f"⬆️ 解放済みキャラ {count} 体をLv.30化")
+        except Exception as e:
+            print(f"Max Cat Levels Error: {e}")
+            actions.append(f"全キャラレベルMAX処理失敗: {e}")
+
+    # --- 3. その他の個別項目処理 ---
+    for k, val in input_data.items():
+        if val == "":
+            continue
+        
+        if k == "catfood":
+            num = int(val)
+            s.set_catfood(num)
+            actions.append(f"ネコカン {num}")
+        elif k == "xp":
+            num = int(val)
+            s.set_xp(num)
+            actions.append(f"XP {num}")
+        elif k == "rare":
+            num = int(val)
+            s.set_rare_tickets(num)
+            actions.append(f"レアチケット {num}")
+        elif k == "normal":
+            num = int(val)
+            s.set_normal_tickets(num)
+            actions.append(f"にゃんこチケット {num}")
+        elif k == "platinum":
+            num = int(val)
+            s.set_platinum_tickets(num)
+            actions.append(f"プラチナチケット {num}")
+        elif k == "legend":
+            num = int(val)
+            s.set_legend_tickets(num)
+            actions.append(f"レジェンドチケット {num}")
+        elif k == "np":
+            num = int(val)
+            s.set_np(num)
+            actions.append(f"NP {num}")
+        elif k == "lead":
+            num = int(val)
+            s.set_leadership(num)
+            actions.append(f"リーダーシップ {num}")
+        elif k == "battleitem":
+            num = int(val)
             try:
-                s.set_catfood(45000)
-                s.set_xp(99999999)
-                s.set_rare_tickets(299)
-                s.set_normal_tickets(999)
-                s.set_platinum_tickets(9)
-                s.set_legend_tickets(9)
-                s.set_np(9999)
-                s.set_leadership(9999)
-
                 for i in range(len(s.battle_items.items)):
-                    s.battle_items.items[i] = 999
-
+                    s.battle_items.items[i] = num
+                actions.append(f"戦闘アイテム全種 {num}")
+            except Exception as e:
+                print(f"Battle Item Error: {e}")
+        elif k == "unlock_cats":
+            for cat in s.cats.cats:
+                cat.unlocked = True
+                if hasattr(cat, 'set_obtained'):
+                    cat.set_obtained(True)
+                if hasattr(cat, 'upgrade') and cat.upgrade is not None:
+                    if hasattr(cat.upgrade, 'base_lv'):
+                        if cat.upgrade.base_lv < 0:
+                            cat.upgrade.base_lv = 29
+                    elif hasattr(cat.upgrade, 'level'):
+                        if cat.upgrade.level < 0:
+                            cat.upgrade.level = 29
+            actions.append("全キャラ解放")
+        elif k == "remove_error_cats":
+            s.cats.cats = [cat for cat in s.cats.cats if 0 <= cat.id < 1000]
+            for cat in s.cats.cats:
+                if not hasattr(cat, 'upgrade') or cat.upgrade is None:
+                    cat.unlocked = False
+                    if hasattr(cat, 'set_obtained'):
+                        cat.set_obtained(False)
+            actions.append("エラーキャラ削除・リセット完了")
+        elif k == "unlock_stages":
+            core.StoryChapters.clear_tutorial(editor.save_file)
+            story_chapters = editor.save_file.story.get_real_chapters()
+            for chapter in story_chapters:
+                chapter.clear_chapter()
+                for stage in chapter.get_valid_treasure_stages():
+                    stage.set_treasure(3)
+            actions.append("全ステージ解放・お宝コンプ完了")
+        elif k == "catseye":
+            num = int(val)
+            try:
                 from bcsfe.core.game.catbase.matatabi import Matatabi
                 matatabi_catalog = Matatabi(s)
-                if matatabi_catalog.matatabi:
-                    for fruit in matatabi_catalog.matatabi:
+                matatabi_list = matatabi_catalog.matatabi
+                if matatabi_list:
+                    count = 0
+                    for fruit in matatabi_list:
                         item_id = fruit.id
                         items_dict = s.gatya_items.items
                         if item_id in items_dict:
-                            items_dict[item_id].count = 999
+                            items_dict[item_id].count = num
                         else:
-                            items_dict[item_id] = core.GatyaItem(999)
-
-                actions.append("🚀 主要アイテム全MAX (カンスト設定)")
+                            items_dict[item_id] = core.GatyaItem(num)
+                        count += 1
+                    actions.append(f"全マタタビ/キャッツアイ {num}個")
             except Exception as e:
-                print(f"Max Items Error: {e}")
-                actions.append(f"アイテム全MAX処理失敗: {e}")
-
-        # --- 2. 解放済み全キャラレベル30化 ---
-        if "max_cat_levels" in self.values:
+                print(f"Matatabi Error: {e}")
+                actions.append(f"マタタビ処理失敗: {e}")
+        elif k == "event_ticket":
+            num = int(val)
+            actions.append(f"イベントチケット {num}")
+        elif k == "daisannkeitai":
             try:
+                all_cats: list[core.Cat] = s.cats.cats
+                s.cats.true_form_cats(s, all_cats, True, True)
+                actions.append("所持キャラ第3形態化")
+            except Exception as e:
+                print(f"Error details: {e}")
+                actions.append(f"第3形態化失敗: {e}")
+        elif k == "gold_pass":
+            try:
+                officer_pass = s.officer_pass
+                club = officer_pass.gold_pass
+                officer_id = core.NyankoClub.get_random_officer_id()
+                club.get_gold_pass(officer_id, 30, s)
+                actions.append(f"ゴールドパス解放 (ID: {officer_id})")
+            except Exception as e:
+                print(f"Gold Pass Error: {e}")
+                actions.append(f"ゴールドパス解放失敗: {e}")
+        elif k == "item_pack":
+            try:
+                item_pack = s.item_pack
                 count = 0
-                for cat in s.cats.cats:
-                    if getattr(cat, "unlocked", False):
-                        if hasattr(cat, "upgrade") and cat.upgrade is not None:
-                            if hasattr(cat.upgrade, "base_lv"):
-                                cat.upgrade.base_lv = 29  # 内部値29 = 表示レベル30
-                            elif hasattr(cat.upgrade, "level"):
-                                cat.upgrade.level = 29
+                for set_id, purchase_set in item_pack.purchases.purchases.items():
+                    for pack_name, pack in purchase_set.purchases.items():
+                        if not pack.purchased:
+                            pack.purchased = True
                             count += 1
-                        elif hasattr(cat, "level"):
-                            cat.level = 29
-                            count += 1
-                actions.append(f"⬆️ 解放済みキャラ {count} 体をLv.30化")
+                item_pack.three_days_started = False
+                actions.append("全アイテムパック購入済み化")
             except Exception as e:
-                print(f"Max Cat Levels Error: {e}")
-                actions.append(f"全キャラレベルMAX処理失敗: {e}")
-
-        # --- 3. その他の個別項目処理 ---
-        for k, v in self.inputs.items():
-            if v.value == "":
-                continue
-            
-            if k == "catfood":
-                num = int(v.value)
-                s.set_catfood(num)
-                actions.append(f"ネコカン {num}")
-            elif k == "xp":
-                num = int(v.value)
-                s.set_xp(num)
-                actions.append(f"XP {num}")
-            elif k == "rare":
-                num = int(v.value)
-                s.set_rare_tickets(num)
-                actions.append(f"レアチケット {num}")
-            elif k == "normal":
-                num = int(v.value)
-                s.set_normal_tickets(num)
-                actions.append(f"にゃんこチケット {num}")
-            elif k == "platinum":
-                num = int(v.value)
-                s.set_platinum_tickets(num)
-                actions.append(f"プラチナチケット {num}")
-            elif k == "legend":
-                num = int(v.value)
-                s.set_legend_tickets(num)
-                actions.append(f"レジェンドチケット {num}")
-            elif k == "np":
-                num = int(v.value)
-                s.set_np(num)
-                actions.append(f"NP {num}")
-            elif k == "lead":
-                num = int(v.value)
-                s.set_leadership(num)
-                actions.append(f"リーダーシップ {num}")
-            elif k == "battleitem":
-                num = int(v.value)
-                try:
-                    for i in range(len(s.battle_items.items)):
-                        s.battle_items.items[i] = num
-                    actions.append(f"戦闘アイテム全種 {num}")
-                except Exception as e:
-                    print(f"Battle Item Error: {e}")
-            elif k == "unlock_cats":
-                for cat in s.cats.cats:
-                    cat.unlocked = True
-                    if hasattr(cat, 'set_obtained'):
-                        cat.set_obtained(True)
-                    if hasattr(cat, 'upgrade') and cat.upgrade is not None:
-                        if hasattr(cat.upgrade, 'base_lv'):
-                            if cat.upgrade.base_lv < 0:
-                                cat.upgrade.base_lv = 29
-                        elif hasattr(cat.upgrade, 'level'):
-                            if cat.upgrade.level < 0:
-                                cat.upgrade.level = 29
-                actions.append("全キャラ解放")
-            elif k == "remove_error_cats":
-                s.cats.cats = [cat for cat in s.cats.cats if 0 <= cat.id < 1000]
-                for cat in s.cats.cats:
-                    if not hasattr(cat, 'upgrade') or cat.upgrade is None:
-                        cat.unlocked = False
-                        if hasattr(cat, 'set_obtained'):
-                            cat.set_obtained(False)
-                actions.append("エラーキャラ削除・リセット完了")
-            elif k == "unlock_stages":
-                core.StoryChapters.clear_tutorial(self.editor.save_file)
-                story_chapters = self.editor.save_file.story.get_real_chapters()
-                for chapter in story_chapters:
-                    chapter.clear_chapter()
-                    for stage in chapter.get_valid_treasure_stages():
-                        stage.set_treasure(3)
-                actions.append("全ステージ解放・お宝コンプ完了")
-            elif k == "catseye":
-                num = int(v.value)
-                try:
-                    from bcsfe.core.game.catbase.matatabi import Matatabi
-                    matatabi_catalog = Matatabi(s)
-                    matatabi_list = matatabi_catalog.matatabi
-                    if matatabi_list:
-                        count = 0
-                        for fruit in matatabi_list:
-                            item_id = fruit.id
-                            items_dict = s.gatya_items.items
-                            if item_id in items_dict:
-                                items_dict[item_id].count = num
-                            else:
-                                items_dict[item_id] = core.GatyaItem(num)
-                            count += 1
-                        actions.append(f"全マタタビ/キャッツアイ {num}個")
-                except Exception as e:
-                    print(f"Matatabi Error: {e}")
-                    actions.append(f"マタタビ処理失敗: {e}")
-            elif k == "event_ticket":
-                num = int(v.value)
-                actions.append(f"イベントチケット {num}")
-            elif k == "daisannkeitai":
-                try:
-                    all_cats: list[core.Cat] = s.cats.cats
-                    s.cats.true_form_cats(s, all_cats, True, True)
-                    actions.append("所持キャラ第3形態化")
-                except Exception as e:
-                    print(f"Error details: {e}")
-                    actions.append(f"第3形態化失敗: {e}")
-            elif k == "gold_pass":
-                try:
-                    officer_pass = s.officer_pass
-                    club = officer_pass.gold_pass
-                    officer_id = core.NyankoClub.get_random_officer_id()
-                    club.get_gold_pass(officer_id, 30, s)
-                    actions.append(f"ゴールドパス解放 (ID: {officer_id})")
-                except Exception as e:
-                    print(f"Gold Pass Error: {e}")
-                    actions.append(f"ゴールドパス解放失敗: {e}")
-            elif k == "item_pack":
-                try:
-                    item_pack = s.item_pack
-                    count = 0
-                    for set_id, purchase_set in item_pack.purchases.purchases.items():
-                        for pack_name, pack in purchase_set.purchases.items():
-                            if not pack.purchased:
-                                pack.purchased = True
-                                count += 1
-                    item_pack.three_days_started = False
-                    actions.append("全アイテムパック購入済み化")
-                except Exception as e:
-                    print(f"Item Pack Error: {e}")
-                    actions.append(f"アイテムパック処理失敗: {e}")
-            elif k == "medals":
-                try:
-                    medals_obj = s.medals
-                    count = 0
-                    for medal_id in range(200):
-                        if not medals_obj.has_medal(medal_id):
-                            medals_obj.add_medal(medal_id)
-                            count += 1
-                    actions.append("全メダル解放")
-                except Exception as e:
-                    print(f"Medals Error: {e}")
-                    actions.append(f"メダル処理失敗: {e}")
-
-        # アップロード処理
-        t_code, pin = self.editor.upload_save()
-        if t_code:
-            dm = discord.Embed(title="代行完了", color=0x2ecc71)
-            dm.add_field(name="引継ぎコード", value=f"`{t_code}`", inline=False)
-            dm.add_field(name="認証コード", value=f"`{pin}`", inline=False)
-            dm.set_footer(text="必ず保存してください")
+                print(f"Item Pack Error: {e}")
+                actions.append(f"アイテムパック処理失敗: {e}")
+        elif k == "medals":
             try:
-                await interaction.user.send(embed=dm)
-            except:
-                pass
-            done = discord.Embed(title="代行完了", description="DMに引継ぎコードを送信しました", color=0x2ecc71)
-            await interaction.followup.send(embed=done, ephemeral=True)
-        else:
-            err = discord.Embed(title="エラー", description=f"```{self.editor.last_error}```", color=0xff0000)
-            await interaction.followup.send(embed=err, ephemeral=True)
+                medals_obj = s.medals
+                count = 0
+                for medal_id in range(200):
+                    if not medals_obj.has_medal(medal_id):
+                        medals_obj.add_medal(medal_id)
+                        count += 1
+                actions.append("全メダル解放")
+            except Exception as e:
+                print(f"Medals Error: {e}")
+                actions.append(f"メダル処理失敗: {e}")
 
-        # ログ送信
-        gid = str(self.editor.guild_id)
-        if gid in config:
-            ch = interaction.client.get_channel(config[gid])
-            if ch:
-                log = discord.Embed(title="にゃんこ大戦争代行ログ", color=0x3498db)
-                log.set_author(name=self.editor.user.name, icon_url=self.editor.user.display_avatar.url)
-                log.add_field(name="購入者", value=self.editor.user.mention)
-                log.add_field(name="内容", value="\n".join(actions) if actions else "変更なし")
-                log.add_field(name="日時", value=f"<t:{int(time.time())}:F>")
-                await ch.send(embed=log)
+    return actions
+
+async def execute_and_reply(editor: CloudEditor, interaction: discord.Interaction, actions: list):
+    """結果のアップロードとレスポンス処理"""
+    t_code, pin = editor.upload_save()
+    if t_code:
+        dm = discord.Embed(title="代行完了", color=0x2ecc71)
+        dm.add_field(name="引継ぎコード", value=f"`{t_code}`", inline=False)
+        dm.add_field(name="認証コード", value=f"`{pin}`", inline=False)
+        dm.set_footer(text="必ず保存してください")
+        try:
+            await interaction.user.send(embed=dm)
+        except:
+            pass
+        done = discord.Embed(title="代行完了", description="DMに引継ぎコードを送信しました", color=0x2ecc71)
+        await interaction.followup.send(embed=done, ephemeral=True)
+    else:
+        err = discord.Embed(title="エラー", description=f"```{editor.last_error}```", color=0xff0000)
+        await interaction.followup.send(embed=err, ephemeral=True)
+
+    gid = str(editor.guild_id)
+    if gid in config:
+        ch = interaction.client.get_channel(config[gid])
+        if ch:
+            log = discord.Embed(title="にゃんこ大戦争代行ログ", color=0x3498db)
+            log.set_author(name=editor.user.name, icon_url=editor.user.display_avatar.url)
+            log.add_field(name="購入者", value=editor.user.mention)
+            log.add_field(name="内容", value="\n".join(actions) if actions else "変更なし")
+            log.add_field(name="日時", value=f"<t:{int(time.time())}:F>")
+            await ch.send(embed=log)
+
+
+class MultiValueModal(ui.Modal):
+    def __init__(self, editor, values, input_keys):
+        super().__init__(title="数値入力")
+        self.editor = editor
+        self.values = values
+        self.inputs = {}
+        
+        labels = {
+            "catfood": "ネコカン",
+            "xp": "XP",
+            "rare": "レアチケット",
+            "normal": "にゃんこチケット",
+            "platinum": "プラチナチケット",
+            "legend": "レジェンドチケット",
+            "np": "NP",
+            "lead": "リーダーシップ",
+            "battleitem": "戦闘アイテム",
+            "unlock_cats": "全キャラ解放 (任意の文字)",
+            "remove_error_cats": "エラーキャラ削除 (任意の文字)",
+            "unlock_stages": "全ステージ解放 (任意の文字)",
+            "catseye": "キャッツアイ",
+            "event_ticket": "イベントチケット",
+            "daisannkeitai": "第3形態 (任意の文字)",
+            "gold_pass": "ゴールド会員 (任意の文字)",
+            "item_pack": "アイテムパック解放 (任意の文字)",
+            "medals": "メダル全解放 (任意の文字)"
+        }
+
+        for k in input_keys:
+            default_val = "999" if k == "event_ticket" else ""
+            t = ui.TextInput(label=labels.get(k, k), default=default_val, required=False)
+            self.inputs[k] = t
+            self.add_item(t)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        input_data = {k: v.value for k, v in self.inputs.items()}
+        actions = process_modifications(self.editor, self.values, input_data)
+        await execute_and_reply(self.editor, interaction, actions)
+
 
 class ModDropdown(ui.Select):
     def __init__(self, editor):
@@ -519,10 +463,22 @@ class ModDropdown(ui.Select):
             discord.SelectOption(label="17,アイテムパック解放", value="item_pack"),
             discord.SelectOption(label="18,にゃんこメダル全解放", value="medals"),
         ]
-        super().__init__(placeholder="適用する項目をすべて選んでください...", min_values=1, max_values=len(options), options=options)
+        # DiscordのModal上限（テキスト入力5個まで）に合わせて max_values=5 に設定
+        super().__init__(placeholder="適用する項目を選んでください (最大5つ)", min_values=1, max_values=5, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.send_modal(MultiValueModal(self.editor, self.values, self.editor.save_file))
+        # 一括処理系以外のテキスト入力が必要なキーを抽出
+        no_input_keys = ["max_items", "max_cat_levels"]
+        input_keys = [v for v in self.values if v not in no_input_keys]
+
+        if not input_keys:
+            # 入力項目がなく、全MAXなど一括処理のみ選択された場合はモーダルを出さずに即実行
+            await interaction.response.defer(ephemeral=True)
+            actions = process_modifications(self.editor, self.values, {})
+            await execute_and_reply(self.editor, interaction, actions)
+        else:
+            # テキスト入力項目がある場合はモーダルを表示
+            await interaction.response.send_modal(MultiValueModal(self.editor, self.values, input_keys))
 
 
 class LoginModal(ui.Modal, title="代行ログイン"):
@@ -530,29 +486,16 @@ class LoginModal(ui.Modal, title="代行ログイン"):
     p = ui.TextInput(label="認証コード", min_length=4, max_length=4)
 
     async def on_submit(self, interaction: discord.Interaction):
-        print(f"--- ログイン処理開始 ---")
-        print(f"ユーザー: {interaction.user} (ID: {interaction.user.id})")
-        print(f"引き継ぎコード: {self.t.value}")
-        print(f"認証コード: {self.p.value}")
-        print("ステータス: ログイン中...")
-
         await interaction.response.defer(ephemeral=True)
 
         editor = CloudEditor(self.t.value, self.p.value, interaction.user, interaction.guild.id)
 
         if editor.download_save():
-            print("ステータス: ログイン完了")
-            print(f"------------------------")
-
-            embed = discord.Embed(title="ログイン完了", description="適用する項目を選択してください", color=0x5865F2)
+            embed = discord.Embed(title="ログイン完了", description="適用する項目を選択してください (同時に選択できるのは最大5個までです)", color=0x5865F2)
             view = ui.View()
             view.add_item(ModDropdown(editor))
             await interaction.followup.send(embed=embed, view=view, ephemeral=True)
         else:
-            print(f"ステータス: ログイン失敗")
-            print(f"エラー内容: {editor.last_error}")
-            print(f"------------------------")
-
             err = discord.Embed(title="ログインエラー", description=f"```{editor.last_error}```", color=0xff0000)
             await interaction.followup.send(embed=err, ephemeral=True)
 
