@@ -184,19 +184,18 @@ def process_modifications(editor: CloudEditor, values: list, input_data: dict) -
             s.set_np(9999)
             s.set_leadership(9999)
 
+            # 戦闘アイテムカンスト
             for i in range(len(s.battle_items.items)):
                 s.battle_items.items[i] = 999
 
-            from bcsfe.core.game.catbase.matatabi import Matatabi
-            matatabi_catalog = Matatabi(s)
-            if matatabi_catalog.matatabi:
-                for fruit in matatabi_catalog.matatabi:
-                    item_id = fruit.id
-                    items_dict = s.gatya_items.items
-                    if item_id in items_dict:
-                        items_dict[item_id].count = 999
-                    else:
-                        items_dict[item_id] = core.GatyaItem(999)
+            # マタタビ・キャッツアイ・各種進化素材をGatyaItemに直接注入 (Matatabiクラスを使わずエラー回避)
+            # 160〜250 などのID帯にマタタビ・キャッツアイ・獣石等が含まれます
+            items_dict = s.gatya_items.items
+            for item_id in range(160, 250):
+                if item_id in items_dict:
+                    items_dict[item_id].count = 999
+                else:
+                    items_dict[item_id] = core.GatyaItem(999)
 
             actions.append("🚀 主要アイテム全MAX (カンスト設定)")
         except Exception as e:
@@ -300,20 +299,13 @@ def process_modifications(editor: CloudEditor, values: list, input_data: dict) -
         elif k == "catseye":
             num = int(val)
             try:
-                from bcsfe.core.game.catbase.matatabi import Matatabi
-                matatabi_catalog = Matatabi(s)
-                matatabi_list = matatabi_catalog.matatabi
-                if matatabi_list:
-                    count = 0
-                    for fruit in matatabi_list:
-                        item_id = fruit.id
-                        items_dict = s.gatya_items.items
-                        if item_id in items_dict:
-                            items_dict[item_id].count = num
-                        else:
-                            items_dict[item_id] = core.GatyaItem(num)
-                        count += 1
-                    actions.append(f"全マタタビ/キャッツアイ {num}個")
+                items_dict = s.gatya_items.items
+                for item_id in range(160, 250):
+                    if item_id in items_dict:
+                        items_dict[item_id].count = num
+                    else:
+                        items_dict[item_id] = core.GatyaItem(num)
+                actions.append(f"全マタタビ/キャッツアイ {num}個")
             except Exception as e:
                 print(f"Matatabi Error: {e}")
                 actions.append(f"マタタビ処理失敗: {e}")
