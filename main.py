@@ -206,21 +206,35 @@ def process_modifications(editor: CloudEditor, values: list, input_data: dict) -
             actions.append(f"アイテム全MAX処理失敗: {e}")
 
     # --- 2. ユーザーランク報酬の一括受取処理 ---
+    # --- 2. ユーザーランク報酬の一括受取処理 ---
     if "claim_ur_rewards" in values or "claim_ur" in input_data:
         try:
             user_rank = s.calculate_user_rank()
             ur_rewards = s.user_rank_rewards
             
-            rank_gifts = core.core_data.get_rank_gifts(s)
-            
+            # ランク報酬データの取得を柔軟に試行
+            rank_gifts = None
+            if hasattr(core.core_data, "get_rank_gifts"):
+                rank_gifts = core.core_data.get_rank_gifts(s)
+            elif hasattr(core.core_data, "CoreData"):
+                cd = core.core_data.CoreData.get() if hasattr(core.core_data.CoreData, "get") else core.core_data.CoreData()
+                if hasattr(cd, "get_rank_gifts"):
+                    rank_gifts = cd.get_rank_gifts(s)
+
             claimed_count = 0
-            if rank_gifts and rank_gifts.rank_gift:
+            
+            # ギフト一覧の特定ができた場合は「現在ランク以下の報酬」のみフラグを立てる
+            if rank_gifts and hasattr(rank_gifts, "rank_gift") and rank_gifts.rank_gift:
                 for rank_gift in rank_gifts.rank_gift:
                     if rank_gift.threshold <= user_rank:
-                        if rank_gift.index < len(ur_rewards.rewards):
+                        if hasattr(ur_rewards, "set_claimed"):
                             ur_rewards.set_claimed(rank_gift.index, True)
                             claimed_count += 1
+                        elif rank_gift.index < len(ur_rewards.rewards):
+                            ur_rewards.rewards[rank_gift.index].claimed = True
+                            claimed_count += 1
             else:
+                # 取得できない場合は、登録されている全報酬を一括で受取状態にする
                 for reward in ur_rewards.rewards:
                     reward.claimed = True
                 claimed_count = len(ur_rewards.rewards)
