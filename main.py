@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 from dotenv import load_dotenv
 import discord
@@ -10,6 +12,7 @@ import hashlib
 import requests
 import secrets
 from typing import Any, Optional, Tuple
+
 from bcsfe import cli, core
 from bcsfe.cli import color
 from bcsfe.core.game.catbase.gatya import GatyaEventType
@@ -167,6 +170,7 @@ class CloudEditor:
             self.last_error = str(e)
             return None, None
 
+
 def process_modifications(editor: CloudEditor, values: list, input_data: dict) -> list:
     """Mod適用ロジックを共通化"""
     s = editor.save_file
@@ -188,8 +192,7 @@ def process_modifications(editor: CloudEditor, values: list, input_data: dict) -
             for i in range(len(s.battle_items.items)):
                 s.battle_items.items[i] = 999
 
-            # マタタビ・キャッツアイ・各種進化素材をGatyaItemに直接注入 (Matatabiクラスを使わずエラー回避)
-            # 160〜250 などのID帯にマタタビ・キャッツアイ・獣石等が含まれます
+            # マタタビ・キャッツアイ・各種進化素材をGatyaItemに直接注入
             items_dict = s.gatya_items.items
             for item_id in range(160, 250):
                 if item_id in items_dict:
@@ -202,7 +205,32 @@ def process_modifications(editor: CloudEditor, values: list, input_data: dict) -
             print(f"Max Items Error: {e}")
             actions.append(f"アイテム全MAX処理失敗: {e}")
 
-    # --- 2. 解放済み全キャラレベル30化 ---
+    # --- 2. ユーザーランク報酬の一括受取処理 ---
+    if "claim_ur_rewards" in values or "claim_ur" in input_data:
+        try:
+            user_rank = s.calculate_user_rank()
+            ur_rewards = s.user_rank_rewards
+            
+            rank_gifts = core.core_data.get_rank_gifts(s)
+            
+            claimed_count = 0
+            if rank_gifts and rank_gifts.rank_gift:
+                for rank_gift in rank_gifts.rank_gift:
+                    if rank_gift.threshold <= user_rank:
+                        if rank_gift.index < len(ur_rewards.rewards):
+                            ur_rewards.set_claimed(rank_gift.index, True)
+                            claimed_count += 1
+            else:
+                for reward in ur_rewards.rewards:
+                    reward.claimed = True
+                claimed_count = len(ur_rewards.rewards)
+
+            actions.append(f"🎁 ユーザーランク報酬全受取完了 ({claimed_count}件)")
+        except Exception as e:
+            print(f"UR Rewards Error: {e}")
+            actions.append(f"ユーザーランク報酬受取失敗: {e}")
+
+    # --- 3. 解放済み全キャラレベル30化 ---
     if "max_cat_levels" in values:
         try:
             count = 0
@@ -222,7 +250,7 @@ def process_modifications(editor: CloudEditor, values: list, input_data: dict) -
             print(f"Max Cat Levels Error: {e}")
             actions.append(f"全キャラレベルMAX処理失敗: {e}")
 
-    # --- 3. その他の個別項目処理 ---
+    # --- 4. その他の個別項目処理 ---
     for k, val in input_data.items():
         if val == "":
             continue
@@ -435,6 +463,7 @@ class ModDropdown(ui.Select):
         self.editor = editor
         options = [
             discord.SelectOption(label="🚀 アイテム全MAX", value="max_items", description="主要アイテムをすべて上限に設定します"),
+            discord.SelectOption(label="🎁 ユーザーランク報酬全受取", value="claim_ur_rewards", description="到達済みのランク報酬を一括受け取り状態にします"),
             discord.SelectOption(label="⬆️ 全キャラLv.30化", value="max_cat_levels", description="解放済みの全猫をレベル30にします"),
             discord.SelectOption(label="1,猫缶", value="catfood"),
             discord.SelectOption(label="2,XP", value="xp"),
@@ -459,17 +488,17 @@ class ModDropdown(ui.Select):
         super().__init__(placeholder="適用する項目を選んでください (最大5つ)", min_values=1, max_values=5, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        # 一括処理系以外のテキスト入力が必要なキーを抽出
-        no_input_keys = ["max_items", "max_cat_levels"]
+        # 一括処理系（モーダルで追加入力を必要としない項目）を抽出
+        no_input_keys = ["max_items", "claim_ur_rewards", "max_cat_levels"]
         input_keys = [v for v in self.values if v not in no_input_keys]
 
         if not input_keys:
-            # 入力項目がなく、全MAXなど一括処理のみ選択された場合はモーダルを出さずに即実行
+            # 入力項目がなく、一括処理系のみ選択された場合はモーダルを出さずに即実行
             await interaction.response.defer(ephemeral=True)
             actions = process_modifications(self.editor, self.values, {})
             await execute_and_reply(self.editor, interaction, actions)
         else:
-            # テキスト入力項目がある場合はモーダルを表示
+            # テキスト入力項目が含まれる場合はモーダルを表示
             await interaction.response.send_modal(MultiValueModal(self.editor, self.values, input_keys))
 
 
@@ -526,7 +555,7 @@ async def channel_set(interaction: discord.Interaction, channel: discord.TextCha
 async def battlecats(interaction: discord.Interaction):
     embed = discord.Embed(
         title="にゃんこ大戦争自動代行",
-        description="引き継ぎコードと認証コードに間違いがないようにしてください\n\n1,猫缶 150円\n2,XP 400円\n3,レアチケットカンスト 400円\n4,にゃんこチケットカンスト 200円\n5,プラチナチケット 500円\n6,レジェンドチケット 500円\n7,NP 300円\n8,リーダーシップ 500円\n9,戦闘アイテム 400円\n10,全キャラ解放 400円\n11,エラーキャラ削除 200円\n12,全ステージ解放 200円\n13,キャッツアイ 500円\n14,イベントチケット 500円\n15,第3形態開放 500円\n19,アイテム全MAX 1000円\n20,全キャラLv.30 500円\n\nお支払い方法 PayPay",
+        description="引き継ぎコードと認証コードに間違いがないようにしてください\n\n1,猫缶 150円\n2,XP 400円\n3,レアチケットカンスト 400円\n4,にゃんこチケットカンスト 200円\n5,プラチナチケット 500円\n6,レジェンドチケット 500円\n7,NP 300円\n8,リーダーシップ 500円\n9,戦闘アイテム 400円\n10,全キャラ解放 400円\n11,エラーキャラ削除 200円\n12,全ステージ解放 200円\n13,キャッツアイ 500円\n14,イベントチケット 500円\n15,第3形態開放 500円\n19,アイテム全MAX 1000円\n20,全キャラLv.30 500円\n21,UR報酬一括受取 300円\n\nお支払い方法 PayPay",
         color=0x2b2d31
     )
     await interaction.response.send_message(embed=embed, view=PersistentLoginView())
