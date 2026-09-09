@@ -579,20 +579,6 @@ async def on_ready():
     bot.add_view(PersistentLoginView())
     print(f"ログインしました: {bot.user}")
 
-@bot.event
-async def on_message(message):
-    # ボット自身のメッセージには反応しない
-    if message.author.bot:
-        return
-
-    # 「おはよう」に反応
-    if message.content == "おはよう":
-        await message.reply("おはよう")
-        return
-
-    # コマンドの処理を有効化（on_message を定義する場合は必須）
-    await bot.process_commands(message)
-
 if TOKEN:
     bot.run(TOKEN)
 else:
